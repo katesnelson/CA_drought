@@ -28,6 +28,10 @@ ds[ds==999.99] <- NA
 
 #farming pixels only
 data <- ds[ds$farm_flag == 1,]
+
+Rip <- ds$COUNT_Rip/ds$fmmp_area
+P1914 <- ds$COUNT_Pre1914/ds$fmmp_area
+
 ```
 
 The null model was estimated as:
@@ -57,7 +61,7 @@ Our first multi-level model includes all of the predictor variables as well as i
 
 ``` {r echo = F}
 M1 = lmer(delta_tvp ~ delta_lc + diverse + Avg_WSEL_5yrChange  
-          + WR_density + Perc_Rip + Perc_Pre1914 + GW_dnsty15 + 
+          + WR_density + Rip + P1914 + GW_dnsty15 + 
           delta_lc*diverse + delta_lc*WR_density +delta_lc*GW_dnsty15 + (1 + delta_lc|HUC12), data = ds, REML = "False") 
 
 summary(M1)
@@ -69,15 +73,14 @@ We calculate the deviance for each model, which is a measure of model fit.  We c
 devcomp = getME(M1,"devcomp")
 devM1 = as.numeric(devcomp$cmp[8])
 ```
-The deviance for the full model is `devM1`.  The results of `M1` suggest that `Perc_pre1914` is not significant.  In `M2` we drop this variable from the analysis:
+The deviance for the full model is `devM1`.  We played with dropping different interaction effects and found that only `delta_lc*diverse` significantly improves model fit.  For reasons of parsimony, we dropped the other two interactions effects, `delta_lc*WR_density` and `delta_lc*GW_dnsty15`.  
 
 ```{r echo=F}
-M2 = lmer(delta_tvp ~ delta_lc + diverse + Avg_WSEL_5yrChange + WR_density + Perc_Rip + GW_dnsty15 + 
-            delta_lc*diverse + delta_lc*WR_density +delta_lc*GW_dnsty15 + (1 + delta_lc|HUC12), data = ds, REML = "False") 
+M2 <- lmer(delta_tvp ~ delta_lc + diverse + Avg_WSEL_5yrChange + WR_density + P1914 + Rip + GW_dnsty15 + 
+            delta_lc*diverse + (1 + delta_lc|HUC12), data = ds, REML = "False") 
 summary(M2)
 ```
-
-Then we calculate the deviance and compare it to `M1`.  
+This suggests that diversity moderates the effect of land use change in a pixel, where increased diversity reduces the effect of landuse change on TVP.  
 
 ```{r echo = F}
 devcomp = getME(M2,"devcomp")
@@ -85,77 +88,44 @@ devM2 = as.numeric(devcomp$cmp[8])
 devstat = devM2 - devM1
 ```
 
-The change in deviance is `devstat`.  This deviance vale isn't significant, so let's keep `Perc_Pre1914` in the model for now.  In `M3` we drop `Avg_WSEL_5yrChange` due to low significance.  We compare the deviance of this model to the original full model.
+The change in deviance is `devstat`.  In `M3` we drop `Rip` due to low significance.  
 
 ```{r echo=F}
-M3 = lmer(delta_tvp ~ delta_lc + diverse + WR_density + Perc_Rip + GW_dnsty15 + Perc_Pre1914 +
-            delta_lc*diverse + delta_lc*WR_density +delta_lc*GW_dnsty15 + (1 + delta_lc|HUC12), data = ds, REML = "False") 
+M3 <- lmer(delta_tvp ~ delta_lc + diverse + Avg_WSEL_5yrChange + WR_density + P1914 + GW_dnsty15 + 
+            delta_lc*diverse + (1 + delta_lc|HUC12), data = ds, REML = "False") 
 summary(M3)
 ```
 ```{r echo = F}
 devcomp = getME(M3,"devcomp")
 devM3 = as.numeric(devcomp$cmp[8])
-devstat = devM3 - devM1
+devstat = devM3 - devM2
 devstat 
 ```
-
-Once again the deviance isn't significant, with a value of `devstat`.  In `M4` we drop a cross-level interaction from the analysis, `diverse*delta_lc`.  
+This doesn't really make a difference, deviance change is `devstat`, but we'll drop `Rip` since we include a flag for `P1914`.  Next we drop `Avg_WSEL_5yrChange` which isn't significant and doesn't measure water use in terms of density.  To be consistent, we drop this in the next model.
 
 ```{r echo = F}
-M4 = lmer(delta_tvp ~ delta_lc + diverse + WR_density + Perc_Rip + GW_dnsty15 + Perc_Pre1914 + Avg_WSEL_5yrChange +
-            delta_lc*WR_density +delta_lc*GW_dnsty15 + (1 + delta_lc|HUC12), data = ds, REML = "False") 
+M4 <- lmer(delta_tvp ~ delta_lc + diverse + WR_density + P1914 + GW_dnsty15 + 
+            delta_lc*diverse + (1 + delta_lc|HUC12), data = ds, REML = "False") 
 summary(M4)
 
 devcomp = getME(M4,"devcomp")
 devM4 = as.numeric(devcomp$cmp[8])
-devstat = devM4 - devM1
+devstat = devM4 - devM3
 devstat 
 ```
 
-This shows a significant change in deviance, with a deviance value of `devstat` so we keep the change.  In `M5` we drop the another interaction effect, `delta_lc*WR_density`.
+No significant change in deviance with this change, deviance is `devstat`, but for parsimony and consistency, we drop this variable.  In the final model, we look at the effect of removing the random effect on `delta_lc`.  
 
 ```{r echo=F}
-#drop diverse*delat_LC, delta_lc*WR_density
-M5 = lmer(delta_tvp ~ delta_lc + diverse + WR_density + Perc_Rip + GW_dnsty15 + Perc_Pre1914 + Avg_WSEL_5yrChange +
-            delta_lc*GW_dnsty15 + (1 + delta_lc|HUC12), data = ds, REML = "False") 
-
+M5 <- lmer(delta_tvp ~ delta_lc + diverse + WR_density + P1914 + GW_dnsty15 + 
+            delta_lc*diverse + (1|HUC12), data = ds, REML = "False") 
 summary(M5)
 devcomp = getME(M5,"devcomp")
 devM5 = as.numeric(devcomp$cmp[8])
 devstat = devM5 - devM4
 devstat 
 ```
-The deviance value is `devstat`, which suggest this change was not significant.  We'll keep `delta_lc*WR_density` for now.  Let's try dropping the other interaction term, `delta_lc*GW_dnsty15 `.  
+There's a huge change in deviance when we drop the random effect, suggesting we should keep it in the model.  The final model `M4` shows significant effects for groundwater, the interaction between `delta_lc*diverse` and slight effects of `diverse`.  We played with dropping the two water rights variables one at a time, and in all cases, significance was very small.  We could drop water rights from the analysis, but theoretically it's interesting to include, to show that the structure of surface water water rights matters less than groundwater use.  In any case, leaving them in doesn't reduce the overall fit of the model to the data.
 
-```{r echo=F}
-M6 = lmer(delta_tvp ~ delta_lc + diverse + WR_density + Perc_Rip + GW_dnsty15 + Perc_Pre1914 + Avg_WSEL_5yrChange +
-delta_lc*WR_density + (1 + delta_lc|HUC12), data = ds, REML = "False") 
-summary(M6)
-devcomp = getME(M6,"devcomp")
-devM6 = as.numeric(devcomp$cmp[8])
-devstat = devM6 - devM5
-devstat 
-```
-The deviance value is high, with a value of `devstat`, so we keep the change.  We'll try dropping `diverse`, which has very low signficance.  
+ 
 
-```{r echo=F}
-M7 = lmer(delta_tvp ~ delta_lc + WR_density + Perc_Rip + GW_dnsty15 + Perc_Pre1914 + Avg_WSEL_5yrChange +
-delta_lc*WR_density + (1 + delta_lc|HUC12), data = ds, REML = "False") 
-summary(M7)
-devcomp = getME(M7,"devcomp")
-devM7 = as.numeric(devcomp$cmp[8])
-devstat = devM7 - devM6
-devstat 
-```
-The change in deviance was tiny at `devstat`, so no point dropping this variable.  Just to play, I'll drop the variation in the slope of the effect of `delta_lc` across groups.
-
-```{r echo=F}
-M8 = lmer(delta_tvp ~ delta_lc + WR_density + Perc_Rip + GW_dnsty15 + Perc_Pre1914 + Avg_WSEL_5yrChange +
-delta_lc*WR_density + (1|HUC12), data = ds, REML = "False") 
-summary(M8)
-devcomp = getME(M8,"devcomp")
-devM8 = as.numeric(devcomp$cmp[8])
-devstat = devM8 - devM6
-devstat 
-```
-Ok, this is a crazy massively high change in deviance, so I'll definitely keep the change.  The deviance was `devstat`.  Is this possible?  The size and significance of the intercept remains large, suggesting we should think about additional variables to include.  Controling for the effects of the drought will certainly help.  This final model, however, suggests that the density of groundwater use and water rights have significant effects on total vegetation production.  Interestingly, water right density has a negative effect (need to work on interpretation here of `delta_tvp`).  Groundwater density has a HUGE positive effect.  The interation between land use and water rights density has a significant positive effect.. suggesting that both a change in land-use and dense water rights increased total vegetative production.
