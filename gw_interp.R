@@ -26,12 +26,11 @@ library(raster)
 library(readxl)
 
 #setwd("C:/Users/nelsonks/Documents/Research/Soc Sci/Drought-Vul Data/central valley")
-setwd("C:/Users/tuan/Documents/Research")
+#setwd("C:/Users/tuan/Documents/Research")
 #setwd("C:/Users/tuan/Dropbox/My working papers")
-
+setwd("/data/emily/WF/kate/gw")
 #read in the gw point shapefile, tidy it up, and extract data to a  dataframe
 gw_pts <- readOGR(".","gw_obs") 
-
 
 names(gw_pts@data)<-c("SOURCE", "WELL.NUMBER", "MEASUREMENT.DATE", "DEPTH.TO.WATER", "GW.ELEVATION", "CASGEM.Well.Number","Local.Well.Designation", "Authority.Type",                                
                      "Co.operating.Agency", "Groundwater.Basin.Subbasin.Name","Groundwater.Basin..Subbasin.Number",            
@@ -73,6 +72,18 @@ gw_pts@data = transform(gw_pts@data,
 )
 
 gw_pts@data$yr.mnth <- format(gw_pts@data$MEASUREMENT.DATE, format = "%Y-%m") #create a column of 4-digit year and 2-digit month
+
+cords<-gw_pts@coords #extract coordinates
+cords<-as.data.frame(cords) 
+names(cords) <- c("lon","lat") # name the columns
+gw_pts@data<-gw_pts@data[1:23] # remove empty lat lon columns
+gw_pts@data$lat<- cords$lat  # replace with lat and lon from extracted coords (in WGS84)
+gw_pts@data$lon<-cords$lon
+gw_dat<-gw_pts@data  #save data to a data frame 
+
+gw_data_subset <- gw_dat[,c(2,3,5,24:25)]
+names(gw_data_subset) <- c("WELL", "DATE", "ELEV", "LAT", "LON")
+write.csv(gw_data_subset,'/data/emily/WF/kate/gw/gw.csv')
 
 #gw_dat <- gw_pts@data
 #gw_dat$MEASUREMENT.DATE <- as.Date(gw_dat$MEASUREMENT.DATE)
