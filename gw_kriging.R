@@ -3,13 +3,47 @@
 
 library(dplyr)
 library(gstat)
-library(spacetime)
-library(sp)
+library(spacetime) #https://cran.r-project.org/web/packages/spacetime/vignettes/jss816.pdf
+library(sp)  #creates spatial object
+library(xts) #creates time object
 library(reshape2)
 
 dr <- '/data/emily/WF/kate/gw/'
 
 d <- read.csv(paste(dr,'gw.csv',sep=''), stringsAsFactors=FALSE)
+#long format: each record reflects single space and time combination
+
+#create space-time object, http://www.inside-r.org/packages/cran/spacetime/docs/stConstruct
+d@data$LON <- d@coords[,1]
+d@data$LAT <- d@coords[,2]
+d@data$TIME <- as.Date(d@data$DATE)
+sto <- stConstruct(d@data, c("LAT", "LON"), "TIME", interval = FALSE)  #time instance, not time interval
+
+#variogram, http://www.inside-r.org/node/209774
+var <- variogramST(ELEV~1, locations=data@coords, data=sto, tunit="days", tlags=seq(from=15, to=90, by=15), assumeRegular=F, na.omit=T, progress=T)
+
+plot(var, map=F) #gama distance
+plot(var, map=T) #time distance
+plot(var, wireframe=T) #3d gamma distance time
+
+#http://geostat-course.org/system/files/part01.pdf
+tmp_pred <- data.frame(cbind(d@coords, d@data$TIME))
+colnames(tmp_pred) <- c("x", "y", "t")
+coordinates(tmp_pred) <- ~x+y+t
+blockKrige <- krige(ELEV~1, sto, newdata=tmp_pred, model=model3d) #add block?
+
+
+
+#variogram assumptions
+Instead of using a different variogram for each day, we assume a constant model and use one variogram relying on
+all data treating each day as a copy of the same process (pooled variogram) or averaging the variograms (mean
+                                                variogram). The one estimated variogram is then used for
+each day. This way, all information is used but again no
+temporal interactions are incorporated.
+
+
+
+
 
 #1.  Create SpatialPointsDataFrame
 
