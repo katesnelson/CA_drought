@@ -9,6 +9,7 @@ library(xts) #creates time object
 library(reshape2)
 library(ggplot2)
 library(rgdal)
+library(raster)
 
 #jg direction in space-time variography
 #what's up with variogram bumps
@@ -46,10 +47,11 @@ estiStAni(sampleVar, c(10,150), "vgm", vgm(20,"Exp",120,0))
 #data too sparse?  http://stats.stackexchange.com/questions/35316/problems-estimating-anisotropy-parameters-for-a-spatial-model
 
 #parameter range
-pars.l <- c(sill.s = 0, range.s = 10, nugget.s = 0, sill.t = 0, range.t = 10, 
-            nugget.t = 0, sill.st = 0, range.st = 10, nugget.st = 0, anis = 0)
-pars.u <- c(sill.s = 100, range.s = 100, nugget.s = 10,sill.t = 300, range.t = 100, 
-            nugget.t = 100, sill.st = 200, range.st = 1000, nugget.st = 100,anis = 700) 
+#paramcheck:http://giv-graeler.uni-muenster.de:3838/spacetime/
+pars.l <- c(sill.s = 0.1, range.s = 10, nugget.s = 0.1, sill.t = 0.1, range.t = 10, 
+            nugget.t = 0.1, sill.st = 0.1, range.st = 10, nugget.st = 0.1, anis = 0.1)
+pars.u <- c(sill.s = 200, range.s = 200, nugget.s = 20,sill.t = 300, range.t = 200, 
+            nugget.t = 100, sill.st = 300, range.st = 1000, nugget.st = 100, anis = 700) 
 
 ##################
 #metric model
@@ -151,24 +153,34 @@ MSEssmVarBF <- attr(ssmVarBF, "MSE")
 #find model with smallest RMSE
 
 #plot all 2D
-plot(sampleVar, list(metVarBF, smVarBF, ssmVarBF), all=T) #psVarBF add once k issue fixed
+plot(sampleVar, list(metVarBF, smVarBF, ssmVarBF, psVarBF), all=T) #psVarBF add once k issue fixed
 
 #plot all 3D
-plot(sampleVar, list(metVarBF, smVarBF, ssmVarBF), all=T, wireframe=T, zlim=c(0,120),  #psVarBF add once k issue fixed
+plot(sampleVar, list(metVarBF, smVarBF, ssmVarBF, psVarBF), all=T, wireframe=T, zlim=c(0,120),  #psVarBF add once k issue fixed
      zlab=NULL, xlab=list("distance (km)", rot=30),
      ylab=list("time lag (days)", rot=-35),
      scales=list(arrows=F, z = list(distance = 5)))
 
 #plot fit metrics (data fit)
-MSE_DF <- c(MSEmetVarDF, MSEsmVarDF, MSEssmVarDF) #add ps
+MSE_DF <- c(MSEmetVarDF, MSEsmVarDF, MSEssmVarDF, MSEpsVarDF) 
 barplot(MSE_DF, main="MSE of data fit", ylab="MSE", xlab = "Variogram model",
-        names.arg=c("Metric", "Simple-metric", "Simple-sum-metric"))
+        names.arg=c("Metric", "Simple-metric", "Sum-metric", "Product-sum"))
 
 #plot fit metrics (best fit)
-MSE_BF <- c(MSEmetVarBF, MSEsmVarBF, MSEssmVarBF)  #add ps
+MSE_BF <- c(MSEmetVarBF, MSEsmVarBF, MSEssmVarBF, MSEpsVarBF)  
 barplot(MSE_BF, main="MSE of best fit", ylab="MSE", xlab = "Variogram model",
-        names.arg=c("Metric", "Simple-metric", "Simple-sum-metric"))
+        names.arg=c("Metric", "Simple-metric", "Sum-metric", "Product-sum"))
 
+
+
+#############################################################
+# Prediction grid construction
+#############################################################
+
+#read in raster for extent
+raster_data <- raster('C:\\Users\\Emily\\Dropbox\\Vanderbilt\\Kate_Emily\\CA_drought\\Code\\cv.tif')
+newproj <- '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs'
+raster_data <- projectRaster(raster_data, crs=newproj)
 
 #create new spatiotemporal prediction grid
 pred<-krigeST(LOG_ELEV~1, data=sto, newdata=NEWDATAGRID, sepVar, nmax=50)
@@ -178,9 +190,3 @@ stplot(pred)
 #leave-one-out cross-validation
 #plot figure 6, differences at locations, and 7, differences through time
 
-
-
-
-#fit tables:
-MSEmetVarDF <- attr(metVarDF, "MSE")
-MSEmetVarBF <- attr(metVarBF, "MSE") 
