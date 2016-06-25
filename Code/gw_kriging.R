@@ -15,24 +15,37 @@ library(raster)
 #what's up with variogram bumps
 #any preprocessing of groundwater elevtaion data?  detrend?  log
 
-#random sample of full dataset
-#dr <- '/data/emily/WF/kate/gw/'
-#d <- read.csv(paste(dr,'gw.csv',sep=''), stringsAsFactors=FALSE)
+#home comp
+#dr <- 'C:\\Users\\Emily\\Dropbox\\Vanderbilt\\Kate_Emily\\CA_drought\\Code\\'
+#d <- as.data.frame(read.table(paste(dr, 'dsub.txt', sep=''), header=T), stringsAsFactors=F)
 
-dr <- 'C:\\Users\\Emily\\Dropbox\\Vanderbilt\\Kate_Emily\\CA_drought\\Code\\'
-d <- as.data.frame(read.table(paste(dr, 'dsub.txt', sep=''), header=T), stringsAsFactors=F)
+#ornette
+d <- as.data.frame(read.csv(paste('/data/emily/WF/kate/gw/gw.csv', sep=','), header=T), stringsAsFactors=F)
 coordinates(d) <- ~LON+LAT
 
 #create space-time object, http://www.inside-r.org/packages/cran/spacetime/docs/stConstruct
-df <- data.frame(log(d@data$ELEV), as.Date(d@data$DATE), as.data.frame(d@coords[,1]), as.data.frame(d@coords[,2]))
-names(df) <- c("LOG_ELEV", "TIME", "LON", "LAT")
-df$LOG_ELEV[is.na(df$LOG_ELEV)] <- 0
-sto <- stConstruct(df, c("LAT", "LON"), "TIME", interval = FALSE)  #time instance, not time interval
+#take log of elev for more reasonable numbers, but negative and near-zero numbers cause NANs
+df <- data.frame(d@data$ELEV, as.Date(d@data$DATE), as.data.frame(d@coords[,1]), as.data.frame(d@coords[,2]))
+names(df) <- c("ELEV", "TIME", "LON", "LAT")
+
+#clean up outliers, drop values less than -50 (10%) and more than 3000 (2%)
+df <- subset(df, df$ELEV >= -50 & df$ELEV < 3000, select=c("ELEV", "TIME", "LON", "LAT"))
+
+#random subset of data
+dfs <- df[sample(nrow(df), 0.1*nrow(df)), ]
+
+#space-time object
+sto <- stConstruct(dfs, c("LAT", "LON"), "TIME", interval = FALSE)  #time instance, not time interval
 sto@sp@proj4string <- CRS('+init=epsg:4326')  #WGS84
 stplot(sto)
 
-#space-time SAMPLE variogram
-sampleVar <- variogramST(LOG_ELEV~1, sto, tunit="days", tlags=seq(from=0,to=225,by=30), cutoff = 100, na.omit=T)  #log elevation doesn't work because of negative values
+#space-time SAMPLE variogram, does not work with neg values
+#avg width of CA Central Valley is 64 km, 0.58*64 is 37 --> round up to 40 for spatial range
+#acf is nonstationary, but most change occurs quickly within the first month, so smaller interval should be used, too small and you get holes
+#from acf most significance within 6 months or 180 days 
+#sampleVar <- variogramST(ELEV~1, sto, tunit="days", tlags=seq(from=0,to=225,by=15), cutoff = 40, na.omit=T)  #log elevation doesn't work because of negative values
+#write.table(sampleVar, 'sampleVar.csv', sep=",")
+sampleVar <- read.table('sampleVar.csv', sep=",")
 
 #diagnostic plots
 acf(sto@data, 'xts')  #up to 200 days significant
@@ -50,8 +63,8 @@ estiStAni(sampleVar, c(10,150), "vgm", vgm(20,"Exp",120,0))
 #paramcheck:http://giv-graeler.uni-muenster.de:3838/spacetime/
 pars.l <- c(sill.s = 0.1, range.s = 10, nugget.s = 0.1, sill.t = 0.1, range.t = 10, 
             nugget.t = 0.1, sill.st = 0.1, range.st = 10, nugget.st = 0.1, anis = 0.1)
-pars.u <- c(sill.s = 200, range.s = 200, nugget.s = 20,sill.t = 300, range.t = 200, 
-            nugget.t = 100, sill.st = 300, range.st = 1000, nugget.st = 100, anis = 700) 
+pars.u <- c(sill.s = 500000, range.s = 200000, nugget.s = 3000, sill.t = 300000, range.t = 200000, 
+            nugget.t = 1000, sill.st = 3000, range.st = 100000, nugget.st = 10000, anis = 70000) 
 
 ##################
 #metric model
@@ -64,7 +77,7 @@ pars.u <- c(sill.s = 200, range.s = 200, nugget.s = 20,sill.t = 300, range.t = 2
 #all distances treated equally, only one joint variogram for all three.
 
 metVar <- vgmST("metric",
-                joint = vgm(20,"Exp",100,0), #sill, model, range, nugget
+                joint = vgm(100,"Exp",200,0), #sill, model, range, nugget
                 stAni = 100) #directional dependence
 metVarDF <- fit.StVariogram(sampleVar, metVar, method="L-BFGS-B", fit.method=0)
 MSEmetVarDF <- attr(metVarDF, "MSE")
@@ -153,10 +166,10 @@ MSEssmVarBF <- attr(ssmVarBF, "MSE")
 #find model with smallest RMSE
 
 #plot all 2D
-plot(sampleVar, list(metVarBF, smVarBF, ssmVarBF, psVarBF), all=T) #psVarBF add once k issue fixed
+plot(sampleVar, list(metVarBF, smVarBF, ssmVarBF, psVarBF), all=T) 
 
 #plot all 3D
-plot(sampleVar, list(metVarBF, smVarBF, ssmVarBF, psVarBF), all=T, wireframe=T, zlim=c(0,120),  #psVarBF add once k issue fixed
+plot(sampleVar, list(metVarBF, smVarBF, ssmVarBF, psVarBF), all=T, wireframe=T, zlim=c(0,120),  
      zlab=NULL, xlab=list("distance (km)", rot=30),
      ylab=list("time lag (days)", rot=-35),
      scales=list(arrows=F, z = list(distance = 5)))
@@ -170,7 +183,6 @@ barplot(MSE_DF, main="MSE of data fit", ylab="MSE", xlab = "Variogram model",
 MSE_BF <- c(MSEmetVarBF, MSEsmVarBF, MSEssmVarBF, MSEpsVarBF)  
 barplot(MSE_BF, main="MSE of best fit", ylab="MSE", xlab = "Variogram model",
         names.arg=c("Metric", "Simple-metric", "Sum-metric", "Product-sum"))
-
 
 
 #############################################################
