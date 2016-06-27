@@ -189,13 +189,25 @@ barplot(MSE_BF, main="MSE of best fit", ylab="MSE", xlab = "Variogram model",
 # Prediction grid construction
 #############################################################
 
-#read in raster for extent
-raster_data <- raster('C:\\Users\\Emily\\Dropbox\\Vanderbilt\\Kate_Emily\\CA_drought\\Code\\cv.tif')
+#create spatial reference
 newproj <- '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs'
-raster_data <- projectRaster(raster_data, crs=newproj)
+rast <- raster()
+extent(rast) <- extent(d)
+rast <- as(rast, 'SpatialPixels') #360 x 180 cells
+res(rast@grid@cells.dim) <- c(180,90)
+
+
+#create time object
+#tm.grid <- dfs$TIME[order(dfs$TIME)]
+tm.grid <- seq(as.Date("2000/1/1"), by = "month", length.out = 12*15)
+
+tm.grid <- seq(as.Date("2000/1/1"), by = "month", length.out = 3)
+#sto frame
+grid.st <- STF(rast, tm.grid)
+proj4string(grid.st) <- sto@sp@proj4string  #set to same proj as sto
 
 #create new spatiotemporal prediction grid
-pred<-krigeST(LOG_ELEV~1, data=sto, newdata=NEWDATAGRID, sepVar, nmax=50)
+pred<-krigeST(ELEV~1, data=sto, newdata=grid.st, modelList=psVarBF)
 stplot(pred)
 
 
