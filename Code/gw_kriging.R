@@ -39,7 +39,7 @@ sto@sp@proj4string <- CRS('+init=epsg:4326')  #WGS84
 stplot(sto)
 
 #create sample variogram, NOTE: takes awhile to run
-#sampleVar <- variogramST(ELEV~1, sto, tunit="days", tlags=seq(from=0,to=225,by=15), cutoff = 40, na.omit=T)  #log elevation doesn't work because of negative values
+sampleVar <- variogramST(ELEV~1, sto, tunit="days", tlags=seq(from=0,to=225,by=15), cutoff = 60, na.omit=T)  #log elevation doesn't work because of negative values
 #write.table(sampleVar, 'sampleVar.csv', sep=",")
 sampleVar <- read.table('sampleVar.csv', sep=",")
 
