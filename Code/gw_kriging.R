@@ -15,6 +15,8 @@ library(ggplot2)
 library(rgdal)
 library(raster)
 
+set.seed(10010)
+
 #ekb comp
 #dr <- 'C:\\Users\\Emily\\Dropbox\\Vanderbilt\\Kate_Emily\\CA_drought\\Code\\'
 #d <- as.data.frame(read.table(paste(dr, 'dsub.txt', sep=''), header=T), stringsAsFactors=F)
@@ -29,25 +31,29 @@ names(df) <- c("ELEV", "TIME", "LON", "LAT")
 
 #clean up outliers, drop values less than -50 (10%) and more than 3000 (2%)
 df <- subset(df, df$ELEV >= -50 & df$ELEV < 3000, select=c("ELEV", "TIME", "LON", "LAT"))
+df$ELEV <- log(df$ELEV)
 
 #select random subset of data (10%)
-dfs <- df[sample(nrow(df), 0.1*nrow(df)), ]
+dfs <- df[sample(nrow(df), 0.05*nrow(df)), ]  
+
+#sample of held out datapoints to test fit later
+held_out <- rbind(df, dfs) #duplicate sampled observations
+held_out <- held_out[! duplicated(held_out, fromLast=TRUE) & seq(nrow(held_out)) <= nrow(df), ]
+
+#remove any duplicates
+dfs_clean <- dfs[!(duplicated(dfs[c("LAT", "LON", "TIME")]) | duplicated(dfs[c("LAT","LON", "TIME")], fromLast = TRUE)), ]
 
 #space-time object
-sto <- stConstruct(dfs, c("LAT", "LON"), "TIME", interval = FALSE)  #time instance, not time interval
-sto@sp@proj4string <- CRS('+init=epsg:4326')  #WGS84
+sto <- stConstruct(dfs_clean, c("LAT", "LON"), "TIME", interval = FALSE)  #time instance, not time interval
+sto@sp@proj4string <- CRS('+init=epsg:3310')  # set projection for kriging to NAD83/california albers
 stplot(sto)
+#sto@data$ELEV <- log(sto@data$ELEV)
 
 #create sample variogram, NOTE: takes awhile to run
-sampleVar <- variogramST(ELEV~1, sto, tunit="days", tlags=seq(from=0,to=225,by=15), cutoff = 60, na.omit=T)  #log elevation doesn't work because of negative values
+sampleVar <- variogramST(ELEV~1, sto, tunit="days", tlags=seq(from=0,to=225,by=15), cutoff = 60, width=5, na.omit=T)  
+#log elevation doesn't work if negative values
 #write.table(sampleVar, 'sampleVar.csv', sep=",")
-sampleVar <- read.table('sampleVar.csv', sep=",")
-
-  #avg width of Central Valley is 64 km, 0.58*64 is 37; round up to 40 for spatial range
-  #acf(sto@data, 'xts')  #up to 200 days significant
-  #acf is nonstationary, but most change occurs quickly within the first month, so smaller interval should be used, too small and you get holes
-  #from acf most significance within 6 months or 180 days 
-
+#sampleVar <- read.table('sampleVar.csv', sep=",")
 
 #diagnostic plots
 plot(sampleVar, map=F) 
@@ -183,22 +189,53 @@ barplot(MSE_BF, main="MSE of best fit", ylab="MSE", xlab = "Variogram model",
 #create empty spatial object
 so <- raster()
 extent(so) <- extent(d)
-#8.9858 degrees x by 7.13729 degrees y, 1 degree, 110 km... approx 2.75 km cell size
-so <- as(so, 'SpatialPoints') #360 x 180 cells
-gridded(so) <- TRUE
-so@proj4string <- sto@sp@proj4string  #set sto proj
+so <- setValues(so, 0)
+so_coarse <- aggregate(so, fact=10, fun=mean, expand=TRUE, na.rm=TRUE)
+so_coarse@crs <- sto@sp@proj4string  #set sto proj
 
 #create monthly time object
 tm.grid <- seq(as.Date("2000/1/1"), by = "month", length.out = 12*15)
 
 #sto frame
-grid.st <- STF(sp = as(so, "SpatialPoints"), time = tm.grid)
+grid.st <- STF(sp = as(so_coarse, "SpatialPixels"), time = tm.grid)
 
 #create new spatiotemporal prediction grid
-pred <- krigeST(ELEV~1, data=sto, newdata=grid.st, modelList=psVarBF, bufferNmax=1, progress=T)
-gridded(pred@sp) <- TRUE 
+pred <- krigeST(ELEV~1, data=sto, newdata=grid.st, nmax=20, modelList=psVarBF, stAni=1, progress=T)
+#gridded(pred@sp) <- TRUE 
 stplot(pred)
 
-#leave-one-out cross-validation
-#plot figure 6, differences at locations, and 7, differences through time
+ptm <- proc.time()
+pred1 <- krigeST(ELEV~1, data=sto, newdata=grid.st, nmax=100, stAni=1, modelList=psVarBF, progress=T)
+pred1_time <- proc.time() - ptm
+
+#http://www.inside-r.org/packages/cran/gstat/docs/estiStAni
+#stani <- estiStAni(sampleVar, c(10, 150)), won't work???
+
+ptm <- proc.time()
+pred2 <- krigeST(ELEV~1, data=sto, newdata=grid.st, nmax=100, stAni=100, modelList=psVarBF, progress=T)
+pred2_time <- proc.time() - ptm
+
+
+
+
+#CROSS VALIDATION
+
+#random sample of held-out data
+held_out_sample <- held_out[sample(nrow(held_out), 0.001*nrow(held_out)), ]
+
+#extract values at these held out locations from spacetime prediction object
+test <- as(pred, 'RasterStack')
+
+#compare observed to actual values
+
+#extract predicted
+pred_data <- as.data.frame(pred)
+names(pred_data) <- c("LON", "LAT", "sp.ID", "TIME", "endTime", "timeIndex", "ELEV_PRED")
+drops <- c("sp.ID","endTime", "timeIndex")
+pred_data <- pred_data[ , !(names(pred_data) %in% drops)]
+
+
+test <- merge(held_out_sample, pred_data, by = c("LAT","LON", "TIME")) 
+
+
 
