@@ -236,7 +236,7 @@ gridded(predsp) <- TRUE
 time_list_pred <- unique(attr(predsp, "time"))
 
 
-validation_sample_size <- 1000
+validation_sample_size <- 100
 residuals <- list()
 
 for (i in 1:validation_sample_size) {
@@ -257,6 +257,11 @@ for (i in 1:validation_sample_size) {
   }
   space_obs <- held_out_sp[held_out_sp$time == time_obs,]
   elev_obs <- space_obs$ELEV[1]
+  coor <- space_obs@coords[1,]
+  lon <- coor[1]
+  names(lon) <- "lon"
+  lat <- coor[2]
+  names(lat) <- "lat"
   names(elev_obs) <- "elev_obs"
   
   #extract predicted data from observed data point
@@ -264,7 +269,7 @@ for (i in 1:validation_sample_size) {
   names(elev_pred) <- "elev_pred"
   
   #final data entry
-  residuals[[i]] <- list(elev_obs, elev_pred, time_pred)
+  residuals[[i]] <- list(elev_obs, elev_pred, time_pred, lon, lat)
 }
 
 res <- as.data.frame(do.call(rbind, lapply(residuals, unlist)))
