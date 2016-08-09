@@ -21,18 +21,27 @@ library(Metrics)
 set.seed(10010)
 
 #load data on ornette
-d <- as.data.frame(read.csv(paste('/data/emily/WF/kate/gw/gw.csv', sep=','), header=T), stringsAsFactors=F)
-coordinates(d) <- ~LON+LAT
+d_full <- as.data.frame(read.csv(paste('/data/emily/WF/kate/gw/gw.csv', sep=','), header=T), stringsAsFactors=F)
+coordinates(d_full) <- ~LON+LAT
+d_full@proj4string <- CRS('+init=epsg:4326') 
+d_full <- spTransform(d_full, CRS('+init=epsg:3310'))
+cv <- shapefile('/data/emily/WF/kate/shp/cv_huc.shp')
+cv <- spTransform(cv, CRS(proj4string(d_full)))
+
+#subset point dataset with CV extent
+d <- d_full[cv,]
+
+#create final dataframe
 df <- data.frame(d@data$ELEV, as.Date(d@data$DATE), as.data.frame(d@coords[,1]), as.data.frame(d@coords[,2]))
 names(df) <- c("ELEV", "TIME", "LON", "LAT")
 
 #clean up outliers, drop values less than 0 (10%) and more than 2500 (10%)
-df <- subset(df, df$ELEV >= 0.001 & df$ELEV < 2500, select=c("ELEV", "TIME", "LON", "LAT"))
-df$ELEV <- log(df$ELEV)
+df <- subset(df, df$ELEV >= -50 & df$ELEV < 4000, select=c("ELEV", "TIME", "LON", "LAT"))
+constant_transform <- abs(min(df$ELEV)) + 1
+df$ELEV <- log(df$ELEV + constant_transform) #normally distributed
 
-#select random subset of data (10%)
-#does not necessarily cover all space-time points with observations
-dfs <- df[sample(nrow(df), 0.1*nrow(df)), ] 
+#select random subset of data (70%), does not necessarily cover all space-time points with observations
+dfs <- df[sample(nrow(df), 0.7*nrow(df)), ] 
 
 #remove any duplicates
 dfs_clean <- dfs[!(duplicated(dfs[c("LAT", "LON", "TIME")]) | duplicated(dfs[c("LAT","LON", "TIME")], fromLast = TRUE)), ]
@@ -42,7 +51,7 @@ held_out <- rbind(df, dfs) #duplicate sampled observations
 held_out <- held_out[! duplicated(held_out, fromLast=TRUE) & seq(nrow(held_out)) <= nrow(df), ]
 
 #clean up unnecessary files
-remove(d, df, dfs)
+remove(d_full, d, df, dfs)
 
 #space-time object
 sto <- stConstruct(dfs_clean, c("LAT", "LON"), "TIME", interval = FALSE)  #time instance, not time interval
@@ -50,7 +59,7 @@ sto@sp@proj4string <- CRS('+init=epsg:3310')  # set projection for kriging to NA
 #stplot(sto)
 
 #create sample variogram
-sampleVar <- variogramST(ELEV~1, sto, tunit="days", tlags=seq(from=0,to=180,by=15), cutoff = 60, na.omit=T)  
+sampleVar <- variogramST(ELEV~1, sto, tunit="days", tlags=seq(from=0,to=180,by=15), cutoff = 60, na.omit=T, progress=T)  
 #write.table(sampleVar, 'sampleVar.csv', sep=",")
 #sampleVar <- read.table('sampleVar.csv', sep=",")
 
@@ -58,14 +67,14 @@ sampleVar <- variogramST(ELEV~1, sto, tunit="days", tlags=seq(from=0,to=180,by=1
 plot(sampleVar, map=F) 
 plot(sampleVar, wireframe=T) 
 
-#parameter range, http://giv-graeler.uni-muenster.de:3838/spacetime/
-#provide huge range here
+#parameter range, http://giv-graeler.uni-muenster.de:3838/spacetime/, provide huge range here
 pars.l <- c(sill.s = 0.1, range.s = 10, nugget.s = 0.1, sill.t = 0.1, range.t = 10, 
             nugget.t = 0.1, sill.st = 0.1, range.st = 10, nugget.st = 0.1, anis = 0.1)
-pars.u <- c(sill.s = 500000, range.s = 200000, nugget.s = 3000, sill.t = 300000, range.t = 200000, 
-            nugget.t = 1000, sill.st = 3000, range.st = 100000, nugget.st = 10000, anis = 70000) 
-
-
+pars.u <- c(sill.s = 3000000, range.s = 100, nugget.s = 2000000, sill.t = 300000, range.t = 180, 
+            nugget.t = 2000000, sill.st = 3000000, range.st = 100000, nugget.st = 100000, anis = 70000) 
+#upper range parameter makes big difference
+#range.t - 180 days
+#range.s - 100 km
 
 ############################################################################################################
 #METRIC MODEL
