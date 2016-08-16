@@ -95,7 +95,7 @@ contourplot(gamma~spacelag+timelag, sampleVar, cuts=25)
 #parameter range, http://giv-graeler.uni-muenster.de:3838/spacetime/, provide huge range here
 pars.l <- c(sill.s = 0.1, range.s = 0.01, nugget.s = 0.01, sill.t = 0.1, range.t = 0.01, 
             nugget.t = 0.05, sill.st = 0.1, range.st = 1, nugget.st = 0.05, anis = 0.01)
-pars.u <- c(sill.s = 1, range.s = 60, nugget.s = 0.4, sill.t = 1, range.t = 200, 
+pars.u <- c(sill.s = 1, range.s = 60*1000, nugget.s = 0.4, sill.t = 1, range.t = 200, 
             nugget.t = 0.4, sill.st = 1, range.st = 180, nugget.st = 1, anis = 10)
 
 ############################################################################################################
@@ -131,7 +131,7 @@ pars.u <- c(sill.s = 1, range.s = 60, nugget.s = 0.4, sill.t = 1, range.t = 200,
 #need to provide both spatial and temporal components, plus k, weighting product
 
 psVar <- vgmST("productSum", 
-                space=vgm(.1, "Gau", 60, 0.2), 
+                space=vgm(.1, "Gau", 60*1000, 0.2), 
                 time=vgm(.1, "Exp", 80, 0.2),
                 k=100)
 #psVarDF <- fit.StVariogram(sampleVar, psVar, method="L-BFGS-B", fit.method=0)  
@@ -149,7 +149,7 @@ print(MSEpsVarBF)
 #maximum flexibility
 
 smVar <- vgmST("sumMetric", 
-                space=vgm(.1, "Gau", 60, 0.2), #sill, model, range, nugget
+                space=vgm(.1, "Gau", 60*1000, 0.2), #sill, model, range, nugget
                 time=vgm(.1, "Gau", 80, 0.2),
                 joint=vgm(.1,"Exp",100,0.2),
                 stAni=.01)
@@ -168,7 +168,7 @@ print(MSEsmVarBF)
 #like sum metric but restrict all components to have a single nugget
 
 ssmVar <- vgmST("simpleSumMetric", 
-                space=vgm(.1, "Gau", 60, 0.2),
+                space=vgm(.1, "Gau", 60*1000, 0.2),
                 time=vgm(.1, "Gau", 80, 0.2),
                 joint=vgm(.1,"Sph",100,0.2),
                 nugget=.4, stAni=.01)
@@ -218,8 +218,6 @@ barplot(MSE_BF_uw, main="Unweighted MSE", ylab="MSE", xlab = "Variogram model",
 #PREDICTION GRID CONSTRUCTION
 ############################################################################################################
 
-#WGS84 did not work
-
 #create empty spatial grid
 #coords in meters, 3310 projection
 grd <- SpatialPixels(SpatialPoints(makegrid(cv, n=2900)), proj4string = proj4string(cv))
@@ -227,6 +225,9 @@ grd <- grd[cv,] #subset to central valley
 #check resolution
 #test_raster <- raster(grd) #10K x 10K
 #print(test_raster)
+
+#project cv
+#multiply range by meters
 
 #establish correct project for kriging
 sto_krig <- spTransform(sto, CRS('+init=epsg:3310')) #project to krig
@@ -237,52 +238,24 @@ tm.grid <- seq(as.Date("2000/1/1"), by = "month", length.out = 12*15)
 #empty sto object
 grid.st <- STF(sp = as(grd, "SpatialPixels"), time = tm.grid)
 
-#############################
-#sum-metric
-#############################
-pred <- krigeST(ELEV~1, data=sto_krig, newdata=grid.st, nmax=20, modelList=smVarBF, stAni=smVarBF$stAni, progress=T) 
+#rescale parameters in variogram model 
+
+#krig data
+pred <- krigeST(ELEV~1, data=sto_krig, newdata=grid.st, nmax=20, modelList=smVarBF, stAni=smVarBF$stAni/24/3600, progress=T) 
 gridded(pred@sp) <- TRUE 
-pred_rmse <- krig_rmse(pred, 1000)
+stplot(pred)
 
-#adjustment to stAni
-pred2 <- krigeST(ELEV~1, data=sto_krig, newdata=grid.st, nmax=20, modelList=smVarBF, stAni=smVarBF$stAni/24/3600, progress=T) 
-gridded(pred2@sp) <- TRUE 
-pred2_rmse <- krig_rmse(pred2, 1000)
 
-#change spatial range, joint range and stAni
-smVarBF_t <- smVarBF
-smVarBF_t$space$range <- smVarBF_t$space$range*1000
-smVarBF_t$joint$range <- smVarBF_t$joint$range*1000
-smVarBF_t$stAni <- smVarBF_t$stAni*1000
 
-pred3 <- krigeST(ELEV~1, data=sto_krig, newdata=grid.st, nmax=20, modelList=smVarBF_t, stAni=smVarBF_t$stAni/24/3600, progress=T) 
-gridded(pred3@sp) <- TRUE 
-pred3_rmse <- krig_rmse(pred3, 1000)
+#add stAni, change nmax, manipulate grid, change model, etc.
 
-#could try without stAni adjustment
+so <- raster(100,100)
+so <- setValues(so, 0)
+extent(so) <- extent(sto@sp@bbox)
+crs(so) <- sto@sp@proj4string
+so_proj <- project(so, CRS('+init=epsg:3310'))
+so_coarse <- aggregate(so, fact=10, fun=mean, expand=TRUE, na.rm=TRUE)
 
-#############################
-#simple sum-metric
-#############################
-
-pred4 <- krigeST(ELEV~1, data=sto_krig, newdata=grid.st, nmax=20, modelList=ssmVarBF, stAni=ssmVarBF_t$stAni, progress=T) 
-gridded(pred4@sp) <- TRUE 
-pred4_rmse <- krig_rmse(pred4, 1000)
-
-#adjustment to stAni
-pred5 <- krigeST(ELEV~1, data=sto_krig, newdata=grid.st, nmax=20, modelList=ssmVarBF, stAni=ssmVarBF$stAni/24/3600, progress=T) 
-gridded(pred5@sp) <- TRUE
-pred5_rmse <- krig_rmse(pred5, 1000)
-
-#change spatial range, joint range and stAni
-ssmVarBF_t <- ssmVarBF  #MAKE COPY
-ssmVarBF_t$space$range <- ssmVarBF_t$space$range*1000
-ssmVarBF_t$joint$range <- ssmVarBF_t$joint$range*1000
-ssmVarBF_t$stAni <- ssmVarBF_t$stAni*1000
-
-pred6 <- krigeST(ELEV~1, data=sto_krig, newdata=grid.st, nmax=20, modelList=ssmVarBF_t, stAni=ssmVarBF_t$stAni/24/3600, progress=T) 
-gridded(pred6@sp) <- TRUE 
-pred6_rmse <- krig_rmse(pred6, 1000)
 
 
 ############################################################################################################
@@ -296,56 +269,54 @@ held_out_sto@sp@proj4string <- CRS('+init=epsg:3310')
 held_out_sp <- as(held_out_sto, "Spatial")
 time_list_obs <- unique(held_out_sp@data$time)
 
-krig_rmse <- function(krigged_data, validation_sample_size) {
+#rasterize predicted sto object (PREDICTED)
+predsp <- as(pred, "Spatial") #spatial pixels dataframe
+gridded(predsp) <- TRUE
+time_list_pred <- unique(attr(predsp, "time"))
+
+
+validation_sample_size <- 100
+residuals <- list()
+
+for (i in 1:validation_sample_size) {
   
-  residuals <- list()
-  predsp <- as(krigged_data, "Spatial") #spatial pixels dataframe
-  gridded(predsp) <- TRUE
-  time_list_pred <- unique(attr(predsp, "time"))
-  
-  for (i in 1:validation_sample_size) {
-    
-    #predicted data
-    random_time <- sample(1:length(time_list_pred), 1)
-    time_pred <- time_list_pred[random_time]
-    names(time_pred) <- "time_pred"
-    space_pred <- raster(predsp[random_time])
-  
-    #observed data
-    time_gt <- time_list_obs[time_list_obs > time_pred]
-    if (length(time_gt) == 0) {
-      time_lt <- time_list_obs[time_list_obs < time_pred]
-      time_obs <- tail(time_lt, n=1)
-    } else {
-      time_obs <- time_gt[1]
-    }
-    space_obs <- held_out_sp[held_out_sp$time == time_obs,]
-    elev_obs <- space_obs$ELEV[1]
-    coor <- space_obs@coords[1,]
-    lon <- coor[1]
-    names(lon) <- "lon"
-    lat <- coor[2]
-    names(lat) <- "lat"
-    names(elev_obs) <- "elev_obs"
-    
-    #extract predicted data from observed data point
-    elev_pred <- extract(space_pred, space_obs)[1]
-    names(elev_pred) <- "elev_pred"
-    
-    #final data entry
-    residuals[[i]] <- list(elev_obs, elev_pred, time_pred, lon, lat)
+  #predicted data
+  random_time <- sample(1:length(time_list_pred), 1)
+  time_pred <- time_list_pred[random_time]
+  names(time_pred) <- "time_pred"
+  space_pred <- raster(predsp[random_time])
+
+  #observed data
+  time_gt <- time_list_obs[time_list_obs > time_pred]
+  if (length(time_gt) == 0) {
+    time_lt <- time_list_obs[time_list_obs < time_pred]
+    time_obs <- tail(time_lt, n=1)
+  } else {
+    time_obs <- time_gt[1]
   }
+  space_obs <- held_out_sp[held_out_sp$time == time_obs,]
+  elev_obs <- space_obs$ELEV[1]
+  coor <- space_obs@coords[1,]
+  lon <- coor[1]
+  names(lon) <- "lon"
+  lat <- coor[2]
+  names(lat) <- "lat"
+  names(elev_obs) <- "elev_obs"
   
-  res <- as.data.frame(do.call(rbind, lapply(residuals, unlist)))
-  res <- na.omit(res)
-  res$time_pred <- as.Date(res$time_pred)
+  #extract predicted data from observed data point
+  elev_pred <- extract(space_pred, space_obs)[1]
+  names(elev_pred) <- "elev_pred"
   
-  #mse <- mse(res$elev_obs, res$elev_pred)
-  rmse_final <- rmse(res$elev_obs, res$elev_pred)
-  return(rmse_final)
-  
+  #final data entry
+  residuals[[i]] <- list(elev_obs, elev_pred, time_pred, lon, lat)
 }
 
+res <- as.data.frame(do.call(rbind, lapply(residuals, unlist)))
+res <- na.omit(res)
+res$time_pred <- as.Date(res$time_pred)
+
+mse <- mse(res$elev_obs, res$elev_pred)
+rmse <- rmse(res$elev_obs, res$elev_pred)
 
 
 #back transform
