@@ -453,7 +453,7 @@ plot(select_space, main=paste(obs, coords))
 
 
 #back transform
-#res$elev_obs_t <- exp(res$elev_obs) - constant_transform
-#res$elev_pred_t <- exp(res$elev_pred) - constant_transform
-#difference between observed and predicted                                  
-
+krigged_data <- pred2
+krigged_data@data <- exp(pred2@data) - constant_transform
+saveRDS(krigged_data, '/data/emily/WF/kate/final_data/krigged_data.rds')
+kd <- readRDS('/data/emily/WF/kate/final_data/krigged_data.rds')
