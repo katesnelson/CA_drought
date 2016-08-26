@@ -12,33 +12,55 @@ setwd("C:/Users/nelsonks/Documents/Research/Soc Sci/Drought-Vul Data/central val
 #setwd("C:/Users/tuan/Documents/Research")
 #setwd("C:/Users/tuan/Dropbox/My working papers")
 
-### IMPORT WATER RIGHTS DATA and join to make more managable ### 
-#these files from GICMA give gw points and elevation for wells with reading at both yrs 
+############################################################################
+### IMPORT Ground water data and clean and join to make more managable ### 
+#####################################################################################
+
+#####################################################
+#GICIMA DATA, 
+#https://gis.water.ca.gov/app/gicima/
+#####################################################
+#these files from GICIMA give gw points and elevation for wells with reading at both yrs 
 #useful only for the early year density
 #will not pick up wells that were active in earlier yr and dried up before the later yr
-S2012_S2007 <- readOGR("S2012_S2007_Change_Points","S2012_05yr_pts") 
-S2013_S2008 <- readOGR("S013_S2008_Change_Points","S2013_05yr_pts")
-S2014_S2009 <- readOGR("S2014_S2009_Change_Points","S2014_05yr_pts")
-S2015_S2010 <- readOGR("S2015_S2010_Change_Points","S2015_05yr_pts")
-S2014_S2011 <- readOGR("S2014_S2011_Change_Points","S2014_03yr_pts")
-S2015_S2012 <- readOGR("S2015_S2012_Change_Points","S2015_03yr_pts")
-S2014_S2013 <- readOGR("S2014_S2013_Change_Points","S2014_01yr_pts")
-S2015_S2014 <- readOGR("S2015_S2014_Change_Points","S2015_01yr_pts")
-S2015 <- readOGR("S2015_DGBS_Points")
+#NOT IN USE
 
-dat<-as.data.frame(S2012_S2007@data)
-names07 <- c("ObjectID","SiteID","Depth07","Depth12","Diff","EWSEL","LWSEL","Date07","EWLM","Date12","LWLM")
-names(S2012_S2007) <- names07
-keep07 <- c("SiteID","Depth07","Date07")
-GW2007 <- S2012_S2007[, (names(S2012_S2007)%in% keep07)]
+#S2012_S2007 <- readOGR("S2012_S2007_Change_Points","S2012_05yr_pts") 
+#S2013_S2008 <- readOGR("S013_S2008_Change_Points","S2013_05yr_pts")
+#S2014_S2009 <- readOGR("S2014_S2009_Change_Points","S2014_05yr_pts")
+#S2015_S2010 <- readOGR("S2015_S2010_Change_Points","S2015_05yr_pts")
+#S2014_S2011 <- readOGR("S2014_S2011_Change_Points","S2014_03yr_pts")
+#S2015_S2012 <- readOGR("S2015_S2012_Change_Points","S2015_03yr_pts")
+#S2014_S2013 <- readOGR("S2014_S2013_Change_Points","S2014_01yr_pts")
+#S2015_S2014 <- readOGR("S2015_S2014_Change_Points","S2015_01yr_pts")
+#S2015 <- readOGR("S2015_DGBS_Points")
 
-#data from CASGEM, readings go until 9/9/2015
+#dat<-as.data.frame(S2012_S2007@data)
+#names07 <- c("ObjectID","SiteID","Depth07","Depth12","Diff","EWSEL","LWSEL","Date07","EWLM","Date12","LWLM")
+#names(S2012_S2007) <- names07
+#keep07 <- c("SiteID","Depth07","Date07")
+#GW2007 <- S2012_S2007[, (names(S2012_S2007)%in% keep07)]
+
+
+############################################################################
+#CASGEM California Statewide Groundwater Elevation Monitoring Program
+#http://water.ca.gov/groundwater/casgem/index.cfm
+#############################################################################
+#data from CASGEM, readings go until 9/9/2015, 
+#this does not provide individual gw elevation readings, but provides well information (including location)
+#gw elevation reading can be obtained from CASGEM, but the download process is slow and prone to disconnection
+
 CASGEM_wells <- read.csv("WellsCASGEM.csv")
 max(as.character(CASGEM_wells$Most.Recent.Elevation.Measurement.Date))
 CASGEM_vol <- read.csv("cagsem_wells_voluntary.csv")
 max(as.character(CASGEM_vol$Most.Recent.Elevation.Measurement.Date))
 
-#data from GAMA Geotracker (i think this is a combination of CASGEM, USGS, and GAMA observations), readings until 12/31/2014
+##############################################################################
+#Geotracker GAMA 
+#http://geotracker.waterboards.ca.gov/gama/data_download.asp
+##################################################################################
+# (as enar as i can tell this elev data is a combination of CASGEM, USGS, and GAMA observations), readings until 12/31/2014
+# http://www.waterboards.ca.gov/publications_forms/publications/factsheets/docs/geotrkgama_fs_2015oct.pdf
 gama <- read.csv("gama_all_dtw_elev.txt", sep="\t")
 max(as.character(gama$MEASUREMENT.DATE))
 
