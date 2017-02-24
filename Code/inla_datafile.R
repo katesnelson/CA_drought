@@ -122,12 +122,18 @@ huc.wr@data <- huc.wr@data[ , (names(huc.wr@data) %in% huc_names.final)]
 #k<-huc.wr@data 
 #View(k) #look at the data to confirm selection of correct data and check data classes ---> looks good
 
+#################
+#Fixing the AreaSqKm Values
+#########################
+huc.wr@data$AreaSqKm<-area(huc.wr) #in square meters
+huc.wr@data$AreaSqKm<-huc.wr@data$AreaSqKm/1000000 #convert to sq km
+
 #########################
 #PLOTS
 ############################
 #plot point and polygon together to confirm correct spatial alignment
 plot(huc.wr)
-points(pix, cex=0.005, col="blue")
+points(pix, cex=0.05, col="blue")
 
 #check a few attribute spatial distributions for both resolutions
 spplot(huc.wr[ ,"diverse.07"])
@@ -260,7 +266,7 @@ full.dat.long<-full.long[ ,c(-11,-14, -16,-18,-20,-22,-24,-26,-28,-30,-32,-34,-3
 full.dat.long<-full.dat.long[ ,c(1:10,12,11,13:29)]
 
 ####################################
-#Add densities and percentages
+#Add densities and percentages and correct data classes
 ####################################
 #pixel res 1 km for calculating farmland area
 full.dat.long <- mutate(full.dat.long, fl_areaKm = fl_count*1, wr_dens = wr_cnt/AreaSqKm, 
@@ -268,6 +274,7 @@ full.dat.long <- mutate(full.dat.long, fl_areaKm = fl_count*1, wr_dens = wr_cnt/
                         ag_perc = ag_cnt/wr_cnt, dom_perc = dom_cnt/wr_cnt, ind_perc = ind_cnt/wr_cnt, 
                         fish_perc=fish_cnt/wr_cnt, rec_perc=rec_cnt/wr_cnt, adjud_perc = adjud_cnt/wr_cnt, unauth_perc=unauth_cnt/wr_cnt)
 
+full.dat.long$aglulc<-as.factor(full.dat.long$aglulc)
 #############################
 #Full long data as a Shapefile
 ###############################
@@ -276,19 +283,8 @@ cv.dat<-full.dat
 cv.dat<- cv.dat[ ,2] #retain locations and POINTID only
 cv.dat@data<-left_join(cv.dat@data,full.dat.long, by = "POINTID")
 
-#plots to check joins
+#plot to check joins
 plot(cv.dat, cex = 0.005)
-
-sub<-cv.dat
-sub@data<-sub@data[sub@data$year==14,] #pull out one year at a time
-spplot(sub[ ,"wr_cnt"], cex=0.005)
-spplot(sub[ ,"wr_dens"], cex=0.005)
-spplot(sub[ , "ag_cnt"], cex=0.005)
-spplot(sub[ , "adjud_cnt"], cex=0.005)
-spplot(sub[ , "gw"]) #looks good
-
-#plot(cv.dat[cv.dat@data$year == 7 ,], cex =0.005) #indexing issue, proably becuase actually pull the complete 
-#set of spatial locations for each eyar and it's expecting a subset
 
 ##########################################
 #Write it out
@@ -297,3 +293,57 @@ writeOGR(cv.dat, "/home/kate/CA/", "cv.dat", driver = "ESRI Shapefile")
 saveRDS(cv.dat, file = "/home/kate/CA/data/cv.dat.rds")
 
 #y<-readRDS('/home/kate/CA/data/cv.dat.rds') #check RDS save
+
+#######################################
+#Plots checks and Basic Stat checks
+#######################################
+
+sub<-cv.dat
+sub@data<-sub@data[sub@data$year==14,] #pull out one year at a time
+spplot(sub[ ,"AreaSqKm"], cex=0.5)
+spplot(sub[ ,"wr_cnt"], cex=0.5)
+spplot(sub[ ,"wr_dens"], cex=0.5)
+spplot(sub[ ,"pre_cnt"], cex=0.5)
+spplot(sub[ , "ag_cnt"], cex=0.5)
+spplot(sub[ , "adjud_cnt"], cex=0.5)
+spplot(sub[ , "gw"], cex=0.5) #looks good
+spplot(sub[ ,"diverse"])
+spplot(sub[ ,"fl_cd"])
+spplot(sub[ ,"adjud_perc"])
+spplot(sub[ ,"pre_perc"])
+spplot(sub[ ,"px_tvp"])
+spplot(sub[sub@data$px_tvp==0, ])
+spplot(sub[, "aglulc"])
+#plot(cv.dat[cv.dat@data$year == 7 ,], cex =0.005) #indexing issue, proably becuase actually pull the complete 
+#set of spatial locations for each eyar and it's expecting a subset
+
+#basic stats and quality tests on dataset
+
+any(is.na(sub@data$AreaSqKm))
+hist(sub@data$AreaSqKm)
+min(sub@data$AreaSqKm) #0.0809372 (20 acres)
+max(sub@data$AreaSqKm) #956.2245
+
+any(is.na(sub@data$fl_count))
+hist(sub@data$fl_count)
+min(sub@data$fl_count) #0 --will result in Inf when ag_cnt divided by this 
+max(sub@data$fl_count) #610 sqkm
+
+any(is.na(sub@data$spi))
+any(is.na(sub@data$px_tvp))
+any(is.na(sub@data$fl_cd))
+any(is.na(sub@data$aglulc))
+any(is.na(sub@data$gw)) #TRUE
+any(is.na(sub@data$wr_cnt))
+any(is.na(sub@data$rip_cnt))
+any(is.na(sub@data$pre_cnt))
+any(is.na(sub@data$ag_cnt))
+any(is.na(sub@data$adjud_cnt))
+
+any(is.na(sub@data$wr_dens))
+hist(sub@data$wr_dens[sub@data$wr_dens<1000])
+mean(sub@data$wr_dens)
+min(sub@data$wr_dens) #0 --> because some HUCs have no surface water rights
+max(sub@data$wr_dens) #5831.682
+any(is.na(sub@data$ag_dens)) #TRUE
+

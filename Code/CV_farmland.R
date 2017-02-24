@@ -14,6 +14,7 @@ setwd("C:/Users/nelsonks/Documents/Research/Soc Sci/Drought-Vul Data/central val
 ###################################################################
 ### IMPORT fmmp (CA farmland of importance) SHAPEFILES ###
 #http://www.conservation.ca.gov/dlrp/fmmp/Pages/county_info.aspx
+#repeat for fmmp years 2006, 2008, 2010, 2012, 2014
 ###################################################################
 
 fmmp_2006.yuba <- readOGR("2006_FMMP_shape_files","yuba2006")
