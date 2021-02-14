@@ -37,7 +37,7 @@ cv <- shapefile('cv_huc.shp')
 par("mar")
 par(mar=c(1,1,1,1))
 plot(cv)
-cv <- spTransform(cv, CRS(proj4string(pix))) #set to same proj
+cv <- spTransform(cv, CRS(proj4string(pix))) #set to same proj --> NAD83 California Albers "+init=epsg:3310 +proj=aea +lat_1=34 +lat_2=40.5 +lat_0=0 +lon_0=-120 +x_0=0 +y_0=-4000000 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0"
 proj4string(cv)==proj4string(pix) #double check proj
 pix <- pix[cv,] #Clip
 plot(pix)
