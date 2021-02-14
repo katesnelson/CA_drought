@@ -16,6 +16,8 @@ setwd("C:/")
 #This script reads in the pixel data and watershed data for all years and combines them into a single long 
 #format dataset to be used in R-INLA models.
 
+#CRS of df is California Albers NAD 83 ("+init=epsg:3310 +proj=aea +lat_1=34 +lat_2=40.5 +lat_0=0 +lon_0=-120 +x_0=0 +y_0=-4000000 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0")
+
 ########################
 ###READ IN PIXEL DATA###
 ########################
